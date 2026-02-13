@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: krwstablehub
+  datasource:
+    url: jdbc:mysql://localhost:3306/clearing?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    database-platform: org.hibernate.dialect.MySQLDialect
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+clearing:
+  epoch:
+    seconds: ${CLEARING_EPOCH_SECONDS:30}
+  settlement:
+    max-attempts: ${CLEARING_SETTLEMENT_MAX_ATTEMPTS:5}
+    batch-size: ${CLEARING_SETTLEMENT_BATCH_SIZE:100}
+
+ledger:
+  rpc-url: ${LEDGER_RPC_URL:http://127.0.0.1:8545}
+  chain-id: ${LEDGER_CHAIN_ID:31337}
+  contract-address: ${SETTLEMENT_VAULT_ADDRESS:}
+  operator-private-key: ${LEDGER_OPERATOR_PRIVATE_KEY:}
+  gas-price: ${LEDGER_GAS_PRICE:0}
+  gas-limit: ${LEDGER_GAS_LIMIT:8000000}
