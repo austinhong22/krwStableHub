@@ -1,0 +1,29 @@
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+
+# Java / Spring / Gradle
+.gradle/
+build/
+out/
+target/
+
+# Logs
+*.log
+
+# Node / Hardhat
+node_modules/
+settlement-ledger/node_modules/
+settlement-ledger/artifacts/
+settlement-ledger/cache/
+
+# Coverage
+coverage/
