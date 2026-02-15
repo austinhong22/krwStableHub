@@ -17,6 +17,7 @@ Multi-stablecoin clearing and final settlement proof of concept using MySQL, Spr
    ```bash
    ./scripts/db-up.sh
    ```
+   MySQL is exposed on local port `3307` for this project.
 2. Confirm container status:
    ```bash
    docker ps --filter name=clearing-mysql
@@ -24,6 +25,25 @@ Multi-stablecoin clearing and final settlement proof of concept using MySQL, Spr
 3. Stop database:
    ```bash
    ./scripts/db-down.sh
+   ```
+
+## Run Clearing Hub
+
+1. Start MySQL first:
+   ```bash
+   ./scripts/db-up.sh
+   ```
+2. Start Spring Boot:
+   ```bash
+   (cd clearing-hub && ./gradlew bootRun)
+   ```
+3. Verify actuator health:
+   ```bash
+   curl http://localhost:8080/actuator/health
+   ```
+   Expected response:
+   ```json
+   {"status":"UP"}
    ```
 
 ## Placeholders
