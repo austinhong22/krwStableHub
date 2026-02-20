@@ -29,7 +29,7 @@ public class ObligationEntity extends BaseTimeEntity {
     @Column(name = "tx_id", nullable = false, length = 128, unique = true)
     private String txId;
 
-    @Column(name = "request_hash", nullable = false, length = 64)
+    @Column(name = "request_hash", nullable = false, length = 64, columnDefinition = "char(64)")
     private String requestHash;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

@@ -19,6 +19,25 @@ public interface ObligationRepository extends JpaRepository<ObligationEntity, Lo
 
     List<ObligationEntity> findByEpochIsNullAndStatus(ObligationStatus status);
 
+    @Query("""
+            select coalesce(sum(
+                case
+                    when o.creditorParticipant.id = :participantId then o.amountKrw
+                    when o.debtorParticipant.id = :participantId then -o.amountKrw
+                    else 0
+                end
+            ), 0)
+            from ObligationEntity o
+            where o.epoch.id = :epochId
+              and o.status = :status
+              and (o.creditorParticipant.id = :participantId or o.debtorParticipant.id = :participantId)
+            """)
+    long sumNetDeltaByEpochAndParticipantAndStatus(
+            @Param("epochId") Long epochId,
+            @Param("participantId") Long participantId,
+            @Param("status") ObligationStatus status
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from ObligationEntity o where o.id = :id")
     Optional<ObligationEntity> findByIdForUpdate(@Param("id") Long id);
