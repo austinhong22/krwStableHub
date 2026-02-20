@@ -46,9 +46,61 @@ Multi-stablecoin clearing and final settlement proof of concept using MySQL, Spr
    {"status":"UP"}
    ```
 
-## Placeholders
+## Obligation Intake Examples
 
-- [ ] Add Spring Initializr scaffold under `clearing-hub`.
-- [ ] Add Flyway migration baseline and application configuration.
-- [ ] Add Hardhat project setup and local deploy scripts.
-- [ ] Add end-to-end demo flow documentation.
+All examples below assume:
+- app is running on `localhost:8080`
+- seeded participants `A`, `B`, `C` are present
+
+1. Submit a new obligation:
+   ```bash
+   curl -i -X POST http://localhost:8080/obligations \
+     -H 'Content-Type: application/json' \
+     -d '{
+       "txId":"tx-1001",
+       "payer":"A",
+       "payee":"B",
+       "payAsset":"KRW",
+       "amount":50000
+     }'
+   ```
+   Expected: `HTTP/1.1 202 Accepted` with `status` = `ACCEPTED` (if cap is not exceeded).
+
+2. Repeat the same `txId` with identical payload (idempotent):
+   ```bash
+   curl -i -X POST http://localhost:8080/obligations \
+     -H 'Content-Type: application/json' \
+     -d '{
+       "txId":"tx-1001",
+       "payer":"A",
+       "payee":"B",
+       "payAsset":"KRW",
+       "amount":50000
+     }'
+   ```
+   Then verify only one row exists:
+   ```bash
+   docker exec -i clearing-mysql \
+     mysql -uroot -proot -D clearing \
+     -e "select tx_id, count(*) as cnt from obligations where tx_id='tx-1001' group by tx_id;"
+   ```
+   Expected: `cnt = 1`.
+
+3. Trigger `HELD` by lowering payer cap and sending a large obligation:
+   ```bash
+   docker exec -i clearing-mysql \
+     mysql -uroot -proot -D clearing \
+     -e "update participants set net_debit_cap_krw=10000 where participant_code='A';"
+   ```
+   ```bash
+   curl -i -X POST http://localhost:8080/obligations \
+     -H 'Content-Type: application/json' \
+     -d '{
+       "txId":"tx-1002",
+       "payer":"A",
+       "payee":"B",
+       "payAsset":"KRW",
+       "amount":50000
+     }'
+   ```
+   Expected: `HTTP/1.1 202 Accepted` with `status` = `HELD`.
