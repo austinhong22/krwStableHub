@@ -9,7 +9,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -46,7 +45,6 @@ public class SettlementInstructionEntity extends BaseTimeEntity {
     @Column(name = "next_retry_at")
     private Instant nextRetryAt;
 
-    @Lob
-    @Column(name = "last_error")
+    @Column(name = "last_error", columnDefinition = "text")
     private String lastError;
 }
