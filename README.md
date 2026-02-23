@@ -104,3 +104,57 @@ All examples below assume:
      }'
    ```
    Expected: `HTTP/1.1 202 Accepted` with `status` = `HELD`.
+
+## Epoch Close And Netting Demo
+
+The scheduler checks every 1 second and closes an epoch when its window ends.
+Default epoch window is 60 seconds (`CLEARING_EPOCH_SECONDS`, configurable via env var).
+
+1. Submit mixed `ACCEPTED` obligations in the same epoch:
+   ```bash
+   curl -s -X POST http://localhost:8080/obligations \
+     -H 'Content-Type: application/json' \
+     -d '{"txId":"tx-2001","payer":"A","payee":"B","payAsset":"KRW","amount":70000}'
+   curl -s -X POST http://localhost:8080/obligations \
+     -H 'Content-Type: application/json' \
+     -d '{"txId":"tx-2002","payer":"B","payee":"C","payAsset":"KRW","amount":20000}'
+   curl -s -X POST http://localhost:8080/obligations \
+     -H 'Content-Type: application/json' \
+     -d '{"txId":"tx-2003","payer":"C","payee":"A","payAsset":"KRW","amount":10000}'
+   ```
+2. Read the latest epoch id:
+   ```bash
+   docker exec -i clearing-mysql \
+     mysql -uroot -proot -D clearing \
+     -e "select id, epoch_no, status, opened_at, closed_at from epochs order by id desc limit 3;"
+   ```
+3. Wait until the epoch window closes (up to 60 seconds), then inspect epoch details:
+   ```bash
+   curl -s http://localhost:8080/epochs/{epochId}
+   ```
+   Expected:
+   - `status` = `NETTED`
+   - non-empty `netPositions`
+   - `settlementInstruction.status` = `CREATED`
+   - `settlementInstruction.txHash` = `null` (before final settlement execution)
+
+### `GET /epochs/{epochId}` Response Shape
+
+```json
+{
+  "epochId": 12,
+  "epochNo": 29384756,
+  "status": "NETTED",
+  "openedAt": "2026-02-23T08:30:00Z",
+  "closedAt": "2026-02-23T08:31:00Z",
+  "netPositions": [
+    {"participantCode": "A", "netAmountKrw": -60000},
+    {"participantCode": "B", "netAmountKrw": 50000},
+    {"participantCode": "C", "netAmountKrw": 10000}
+  ],
+  "settlementInstruction": {
+    "status": "CREATED",
+    "txHash": null
+  }
+}
+```
