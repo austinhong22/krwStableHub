@@ -1,6 +1,7 @@
 package com.austinhong22.krwstablehub;
 
 import com.austinhong22.krwstablehub.service.EpochService;
+import com.austinhong22.krwstablehub.service.EpochCloseService;
 import com.austinhong22.krwstablehub.service.NettingService;
 import com.austinhong22.krwstablehub.service.ObligationService;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,9 @@ class KrwstablehubApplicationTests {
 
 	@MockitoBean
 	private NettingService nettingService;
+
+	@MockitoBean
+	private EpochCloseService epochCloseService;
 
 	@Test
 	void contextLoads() {
