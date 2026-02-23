@@ -26,7 +26,7 @@ management:
 
 clearing:
   epoch:
-    seconds: ${CLEARING_EPOCH_SECONDS:30}
+    seconds: ${CLEARING_EPOCH_SECONDS:60}
   settlement:
     max-attempts: ${CLEARING_SETTLEMENT_MAX_ATTEMPTS:5}
     batch-size: ${CLEARING_SETTLEMENT_BATCH_SIZE:100}
