@@ -46,6 +46,31 @@ Multi-stablecoin clearing and final settlement proof of concept using MySQL, Spr
    {"status":"UP"}
    ```
 
+## Run Settlement Ledger (Hardhat)
+
+1. Install dependencies:
+   ```bash
+   (cd settlement-ledger && npm install)
+   ```
+2. Start a local Hardhat chain:
+   ```bash
+   (cd settlement-ledger && npm run node)
+   ```
+3. In another terminal, deploy `SettlementVault` to localhost:
+   ```bash
+   (cd settlement-ledger && npm run deploy:local)
+   ```
+   Expected output includes:
+   - `Deployer: <address>`
+   - `SettlementVault: <address>`
+
+### Environment Variables
+
+Keep secrets out of git and set values locally:
+- `SETTLEMENT_VAULT_ADDRESS`: deployed contract address used by `clearing-hub`
+- `LEDGER_OPERATOR_PRIVATE_KEY`: operator key used by settlement submission flows
+- `LEDGER_OPERATOR_ADDRESS` (optional for deploy script): constructor operator address; defaults to deployer when omitted
+
 ## Obligation Intake Examples
 
 All examples below assume:
