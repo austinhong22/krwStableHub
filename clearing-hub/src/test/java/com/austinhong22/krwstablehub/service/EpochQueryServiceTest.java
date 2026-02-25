@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,7 +53,7 @@ class EpochQueryServiceTest {
         SettlementInstructionEntity instruction = new SettlementInstructionEntity();
         instruction.setEpoch(epoch);
         instruction.setStatus(SettlementStatus.CREATED);
-        instruction.setTxHash(null);
+        instruction.setTxHash("0xdeadbeef");
 
         when(epochRepository.findById(10L)).thenReturn(Optional.of(epoch));
         when(netPositionRepository.findByEpochIdOrderByIdAsc(10L)).thenReturn(List.of(a, b));
@@ -67,8 +66,8 @@ class EpochQueryServiceTest {
         assertEquals(2, response.netPositions().size());
         assertEquals("A", response.netPositions().get(0).participantCode());
         assertEquals(-70L, response.netPositions().get(0).netAmountKrw());
-        assertNotNull(response.settlementInstruction());
-        assertEquals("CREATED", response.settlementInstruction().status());
+        assertEquals("CREATED", response.settlementStatus());
+        assertEquals("0xdeadbeef", response.txHash());
     }
 
     private NetPositionEntity netPosition(EpochEntity epoch, ParticipantEntity participant, long amountKrw) {

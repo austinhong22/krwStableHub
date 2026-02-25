@@ -10,17 +10,12 @@ public record EpochDetailResponse(
         Instant openedAt,
         Instant closedAt,
         List<NetPositionItem> netPositions,
-        SettlementInstructionItem settlementInstruction
+        String settlementStatus,
+        String txHash
 ) {
     public record NetPositionItem(
             String participantCode,
             long netAmountKrw
-    ) {
-    }
-
-    public record SettlementInstructionItem(
-            String status,
-            String txHash
     ) {
     }
 }

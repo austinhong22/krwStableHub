@@ -38,7 +38,8 @@ public class EpochQueryService {
                 epoch.getOpenedAt(),
                 epoch.getClosedAt(),
                 mapPositions(positions),
-                mapSettlementInstruction(settlementInstruction)
+                settlementInstruction == null ? null : settlementInstruction.getStatus().name(),
+                settlementInstruction == null ? null : settlementInstruction.getTxHash()
         );
     }
 
@@ -51,13 +52,4 @@ public class EpochQueryService {
                 .toList();
     }
 
-    private EpochDetailResponse.SettlementInstructionItem mapSettlementInstruction(SettlementInstructionEntity instruction) {
-        if (instruction == null) {
-            return null;
-        }
-        return new EpochDetailResponse.SettlementInstructionItem(
-                instruction.getStatus().name(),
-                instruction.getTxHash()
-        );
-    }
 }
