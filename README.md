@@ -1,185 +1,152 @@
 # KRW Stable Hub PoC
 
-Multi-stablecoin clearing and final settlement proof of concept using MySQL, Spring Boot, and Hardhat.
+Portfolio-grade demo for multi-stablecoin clearing and final settlement:
+- idempotent obligation intake (`tx_id` uniqueness + request hash conflict protection)
+- Net Debit Cap risk control (`HELD`)
+- epoch-based multilateral netting (`net_positions`)
+- single on-chain settlement transaction per epoch (`SettlementVault.settle`)
+- retry convergence + outbox event emission
 
-## Architecture Overview
+## Architecture Summary
 
-- `clearing-hub`:
-  Spring Boot service for obligation intake, risk checks, epoch netting, and settlement orchestration.
-- `settlement-ledger`:
-  Hardhat workspace containing Solidity contracts for local final settlement (`SettlementVault`).
-- `docker-compose.yml`:
-  Local infrastructure for MySQL 8.4.
+- `clearing-hub` (Spring Boot 3 / Java 17):
+  - `POST /obligations`: intake + idempotency + risk decision (`ACCEPTED`/`HELD`)
+  - scheduler closes due epochs, runs netting, creates settlement instruction
+  - settlement scheduler submits one ledger tx per epoch and retries on failure
+  - `GET /epochs/{id}` returns epoch status, net positions, settlement status, tx hash
+- `settlement-ledger` (Hardhat + Solidity):
+  - `SettlementVault` contract validates net-zero deltas and emits `Settled(epochId)`
+- MySQL:
+  - source-of-truth tables: `obligations`, `epochs`, `net_positions`, `settlement_instructions`, `outbox_events`
 
-## Start MySQL
+## Prerequisites
 
-1. Start database:
+- Java 17+
+- Docker + Docker Compose
+- Node.js 20+ and npm
+- `curl`
+
+## Start The System (Reviewer Setup)
+
+Open separate terminals.
+
+1. Start MySQL:
    ```bash
    ./scripts/db-up.sh
    ```
-   MySQL is exposed on local port `3307` for this project.
-2. Confirm container status:
-   ```bash
-   docker ps --filter name=clearing-mysql
-   ```
-3. Stop database:
-   ```bash
-   ./scripts/db-down.sh
-   ```
 
-## Run Clearing Hub
-
-1. Start MySQL first:
-   ```bash
-   ./scripts/db-up.sh
-   ```
-2. Start Spring Boot:
-   ```bash
-   (cd clearing-hub && ./gradlew bootRun)
-   ```
-3. Verify actuator health:
-   ```bash
-   curl http://localhost:8080/actuator/health
-   ```
-   Expected response:
-   ```json
-   {"status":"UP"}
-   ```
-
-## Run Settlement Ledger (Hardhat)
-
-1. Install dependencies:
+2. Install Hardhat dependencies (first time only):
    ```bash
    (cd settlement-ledger && npm install)
    ```
-2. Start a local Hardhat chain:
+
+3. Start local chain:
    ```bash
    (cd settlement-ledger && npm run node)
    ```
-3. In another terminal, deploy `SettlementVault` to localhost:
+
+4. Deploy `SettlementVault` (new terminal):
    ```bash
    (cd settlement-ledger && npm run deploy:local)
    ```
-   Expected output includes:
-   - `Deployer: <address>`
-   - `SettlementVault: <address>`
+   Copy printed `SettlementVault: <address>`.
 
-### Environment Variables
-
-Keep secrets out of git and set values locally:
-- `SETTLEMENT_VAULT_ADDRESS`: deployed contract address used by `clearing-hub`
-- `LEDGER_OPERATOR_PRIVATE_KEY`: operator key used by settlement submission flows
-- `LEDGER_OPERATOR_ADDRESS` (optional for deploy script): constructor operator address; defaults to deployer when omitted
-
-## Obligation Intake Examples
-
-All examples below assume:
-- app is running on `localhost:8080`
-- seeded participants `A`, `B`, `C` are present
-
-1. Submit a new obligation:
+5. Configure env vars for `clearing-hub` (new terminal):
    ```bash
-   curl -i -X POST http://localhost:8080/obligations \
-     -H 'Content-Type: application/json' \
-     -d '{
-       "txId":"tx-1001",
-       "payer":"A",
-       "payee":"B",
-       "payAsset":"KRW",
-       "amount":50000
-     }'
+   export SETTLEMENT_VAULT_ADDRESS=<deployed-address>
+   export LEDGER_OPERATOR_PRIVATE_KEY=<hardhat-operator-private-key>
    ```
-   Expected: `HTTP/1.1 202 Accepted` with `status` = `ACCEPTED` (if cap is not exceeded).
+   Notes:
+   - Keep real values local only.
+   - `.env.example` is intentionally blank.
 
-2. Repeat the same `txId` with identical payload (idempotent):
+6. Start Spring Boot:
    ```bash
-   curl -i -X POST http://localhost:8080/obligations \
-     -H 'Content-Type: application/json' \
-     -d '{
-       "txId":"tx-1001",
-       "payer":"A",
-       "payee":"B",
-       "payAsset":"KRW",
-       "amount":50000
-     }'
+   (cd clearing-hub && ./gradlew bootRun)
    ```
-   Then verify only one row exists:
-   ```bash
-   docker exec -i clearing-mysql \
-     mysql -uroot -proot -D clearing \
-     -e "select tx_id, count(*) as cnt from obligations where tx_id='tx-1001' group by tx_id;"
-   ```
-   Expected: `cnt = 1`.
 
-3. Trigger `HELD` by lowering payer cap and sending a large obligation:
+7. Health check:
    ```bash
-   docker exec -i clearing-mysql \
-     mysql -uroot -proot -D clearing \
-     -e "update participants set net_debit_cap_krw=10000 where participant_code='A';"
+   curl -sS http://localhost:8080/actuator/health
    ```
-   ```bash
-   curl -i -X POST http://localhost:8080/obligations \
-     -H 'Content-Type: application/json' \
-     -d '{
-       "txId":"tx-1002",
-       "payer":"A",
-       "payee":"B",
-       "payAsset":"KRW",
-       "amount":50000
-     }'
-   ```
-   Expected: `HTTP/1.1 202 Accepted` with `status` = `HELD`.
+   Expected: `{"status":"UP"}`
 
-## Epoch Close And Netting Demo
+## Demo Scenarios
 
-The scheduler checks every 1 second and closes an epoch when its window ends.
-Default epoch window is 60 seconds (`CLEARING_EPOCH_SECONDS`, configurable via env var).
+All demo scripts are executable and use `curl` for API actions. Each script prints exact SQL/API checks to run next.
 
-1. Submit mixed `ACCEPTED` obligations in the same epoch:
-   ```bash
-   curl -s -X POST http://localhost:8080/obligations \
-     -H 'Content-Type: application/json' \
-     -d '{"txId":"tx-2001","payer":"A","payee":"B","payAsset":"KRW","amount":70000}'
-   curl -s -X POST http://localhost:8080/obligations \
-     -H 'Content-Type: application/json' \
-     -d '{"txId":"tx-2002","payer":"B","payee":"C","payAsset":"KRW","amount":20000}'
-   curl -s -X POST http://localhost:8080/obligations \
-     -H 'Content-Type: application/json' \
-     -d '{"txId":"tx-2003","payer":"C","payee":"A","payAsset":"KRW","amount":10000}'
-   ```
-2. Read the latest epoch id:
-   ```bash
-   docker exec -i clearing-mysql \
-     mysql -uroot -proot -D clearing \
-     -e "select id, epoch_no, status, opened_at, closed_at from epochs order by id desc limit 3;"
-   ```
-3. Wait until the epoch window closes (up to 60 seconds), then inspect epoch details:
-   ```bash
-   curl -s http://localhost:8080/epochs/{epochId}
-   ```
-   Expected:
-   - `status` = `NETTED`
-   - non-empty `netPositions`
-   - `settlementInstruction.status` = `CREATED`
-   - `settlementInstruction.txHash` = `null` (before final settlement execution)
+### 1) Idempotency
 
-### `GET /epochs/{epochId}` Response Shape
+```bash
+./scripts/demo_idempotency.sh
+```
 
-```json
-{
-  "epochId": 12,
-  "epochNo": 29384756,
-  "status": "NETTED",
-  "openedAt": "2026-02-23T08:30:00Z",
-  "closedAt": "2026-02-23T08:31:00Z",
-  "netPositions": [
-    {"participantCode": "A", "netAmountKrw": -60000},
-    {"participantCode": "B", "netAmountKrw": 50000},
-    {"participantCode": "C", "netAmountKrw": 10000}
-  ],
-  "settlementInstruction": {
-    "status": "CREATED",
-    "txHash": null
-  }
-}
+Shows:
+- same `txId` + same payload is replay-safe
+- same `txId` + different payload returns conflict
+
+### 2) Netting + 1 On-chain Tx
+
+```bash
+./scripts/demo_netting_1tx.sh
+```
+
+Shows:
+- accepted obligations netted at epoch close
+- one settlement instruction with tx hash
+- outbox event for settled epoch
+
+### 3) Risk Cap HOLD
+
+```bash
+./scripts/demo_risk_cap_hold.sh
+```
+
+Shows:
+- over-cap obligation is `HELD`
+- held items are excluded from final netting positions
+
+### 4) Failure + Retry Convergence
+
+Precondition: run `clearing-hub` with intentionally broken ledger connectivity (for example stop Hardhat, or use invalid settlement env vars), then run:
+
+```bash
+./scripts/demo_failure_retry.sh
+```
+
+Shows:
+- settlement instruction transitions through retries
+- `attempt_count` increments and `last_error` is populated
+- terminal state reaches `FAILED` after max attempts
+
+### Guided Portfolio Walkthrough
+
+```bash
+./scripts/demo_full.sh
+```
+
+Interactive by default. Use `--yes` for non-interactive run:
+
+```bash
+./scripts/demo_full.sh --yes
+```
+
+## Useful Verification Queries
+
+Latest epochs:
+
+```bash
+docker exec -i clearing-mysql mysql -uroot -proot -D clearing -e "select id,epoch_no,status,opened_at,closed_at from epochs order by id desc limit 5;"
+```
+
+Settlement instructions:
+
+```bash
+docker exec -i clearing-mysql mysql -uroot -proot -D clearing -e "select id,epoch_id,status,tx_hash,attempt_count,last_error,next_retry_at from settlement_instructions order by id desc limit 10;"
+```
+
+Outbox settled events:
+
+```bash
+docker exec -i clearing-mysql mysql -uroot -proot -D clearing -e "select id,aggregate_id,event_type,status,available_at from outbox_events where aggregate_type='EPOCH' order by id desc limit 10;"
 ```
